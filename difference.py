@@ -50,10 +50,10 @@ _2019 = get_year_data(data_path, '2019')
 _2020 = get_year_data(data_path, '2020')
 
 # Calculate the simple difference between the previous year
-# out = _2020.subtract(_2019.mean(axis=1), axis=0)
+out = _2020.subtract(_2019.mean(axis=1), axis=0)
 
 # calculate the percent increase/decrease
-out = _2020.subtract(_2019.mean(axis=1), axis=0).div(_2019.mean(axis=1), axis=0) * 100
+# out = _2020.subtract(_2019.mean(axis=1), axis=0).div(_2019.mean(axis=1), axis=0) * 100
 
 
 out.index.rename('FIPS', True) # give the index a name 
