@@ -20,7 +20,7 @@ def write_shape_file(outName, df):
     shp['FIPS'] = shp['STATEFP'] + shp['COUNTYFP']
     df = df.copy()
 
-    pcs = len(output.columns)
+    pcs = len(df.columns)
     # normalize all of the values from 0-1
     df[['PC_{}_Normalized'.format(i) for i in range(1,pcs+1)]] = (df - df.min()) / (df.max() - df.min())
 
