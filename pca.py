@@ -35,17 +35,18 @@ def write_shape_file(outName, df, state_level=False):
     print('Done writing {}.'.format(outName))
 
 
-data_path = os.path.join(cwd, 'Outputs', 'percent increase.csv')
+data_path = os.path.join(cwd, 'Data', 'mobility percent difference.csv')
 save_path = os.path.join(cwd, 'Outputs')
 
 
-data, states = read_data(data_path, weekends=False, state_level=False, pop_level=250000)
-print(data.shape)
+title = 'Lower 48 With Weekends 100k Pop'
+data, states = read_data(data_path, weekends=True, state_level=False, pop_level=100000)
+print('Analysis Type: {}'.format(title))
+print('Counties: {}, Days: {}\n'.format(*data.shape))
 data = data.dropna() # make sure there are no null values when training
 
 
 # The title for the output shapefile
-title = 'Counties 250k or more pop with weekends'
 
 # you can change the number of components to however many you want
 components = 3
@@ -56,12 +57,25 @@ X = clf.transform(data)
 # create a dataframe from the model outputs 
 output = pd.DataFrame(X, index=data.index, columns=['PCA_{}_Raw'.format(i) for i in range(1, components+1)])
 
+# plot the histograms of eacg principal component to visually identify outliers
+# fix, ax = plt.subplots(3)
+# for col, _ax in zip(output.columns, ax.ravel()):
+#     output[col].hist(ax=_ax)
+#     _ax.set_title(col)
+# plt.show()
+
+corr_data = pd.read_csv(os.path.join(cwd, 'Data', 'corr_data.csv'), index_col=0, converters={'FIPS':lambda x:str(x).zfill(5)}).set_index('FIPS', drop=True)
+corr_data = pd.merge(output, corr_data, right_index=True, left_index=True )
+
+focus_cols = output.columns
+# print the pearson's R value for each of the principal components
+print(corr_data.corr().filter(focus_cols).drop(focus_cols))
 
 # write the output to a shapefile
 # write_shape_file('{}.shp'.format(title), output, state_level=True)
 
-
 # FOR PLOTTING THE EXPLAINED VARIANCE WITH THE NUMBER OF FEATURES 
+
 var=np.cumsum(np.round(clf.explained_variance_ratio_, decimals=3)*100)
 plt.plot([i for i in range(1,components+1)],var)
 plt.grid()
@@ -70,7 +84,6 @@ plt.xticks([i for i in range(1,components+1)])
 plt.xlabel('Number of features')
 plt.title(title)
 plt.show()
-
 
 
 # ineficient but works, isolates each principal component based on its max value in PCA space and the min for the rest 

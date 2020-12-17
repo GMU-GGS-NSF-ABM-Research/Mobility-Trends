@@ -11,7 +11,7 @@ import os
 
 cwd = os.path.dirname(os.path.abspath(__file__))
 
-save_path = os.path.join(cwd, 'Outputs', input('Save as (no file extension needed): ')+'.csv')
+save_path = os.path.join(cwd, 'Data', 'mobility')
 data_path = os.path.join(cwd, 'safegraph-data', 'aggregated-patterns')
 pop = os.path.join(data_path, '2020', '10', '10', '2020-10-10-countylevel.csv')
 
@@ -51,21 +51,23 @@ def get_year_data(path, year, target_col='med_away'):
 _2019 = get_year_data(data_path, '2019')
 _2020 = get_year_data(data_path, '2020')
 
-# Calculate the simple difference between the previous year
-# out = _2020.subtract(_2019.mean(axis=1), axis=0)
-
-# calculate the percent increase/decrease
-out = _2020.subtract(_2019.mean(axis=1), axis=0).div(_2019.mean(axis=1), axis=0) * 100
-
-
 # adds a state column for when we look at state wide data, helps for creating graphs
 fips = pd.read_csv(os.path.join(cwd, 'safegraph-data', 'safegraph_open_census_data', 'metadata', 'cbg_fips_codes.csv'), converters={'state_fips':lambda x :str(x).zfill(2), 'county_fips':lambda x:str(x).zfill(3)})
 fips['FIPS'] = fips['state_fips'] + fips['county_fips']
-
-out = pd.merge(out, fips, left_index=True, right_on='FIPS').drop(['state_fips', 'county_fips', 'class_code', 'county'], axis=1).set_index('FIPS')
 pop_data = pd.read_csv(pop, usecols=['Unnamed: 0', 'B01003e1'], converters={'Unnamed: 0':lambda x: str(x).zfill(5)}).rename(columns={'Unnamed: 0' :'FIPS', 'B01003e1':'pop'}).set_index('FIPS') 
+
+
+# Calculate the simple difference between the previous year
+out = _2020.subtract(_2019.mean(axis=1), axis=0)
+out = pd.merge(out, fips, left_index=True, right_on='FIPS').drop(['state_fips', 'county_fips', 'class_code', 'county'], axis=1).set_index('FIPS')
 out = pd.merge(out, pop_data, left_index=True, right_index=True) 
+out.to_csv(save_path + ' difference.csv') # save
 
-out.to_csv(save_path) # save
+
+# calculate the percent increase/decrease
+out = _2020.subtract(_2019.mean(axis=1), axis=0).div(_2019.mean(axis=1), axis=0) * 100
+out = pd.merge(out, fips, left_index=True, right_on='FIPS').drop(['state_fips', 'county_fips', 'class_code', 'county'], axis=1).set_index('FIPS')
+out = pd.merge(out, pop_data, left_index=True, right_index=True) 
+out.to_csv(save_path + ' percent difference.csv') # save
+
 print('Done')
-

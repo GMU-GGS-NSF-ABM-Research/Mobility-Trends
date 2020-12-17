@@ -1,5 +1,5 @@
 import pandas as pd
-def read_data(fpath, states_to_remove=['AK', 'PR', 'HI'], pop_level=None, weekends=True, state_level=False):
+def read_data(fpath:str, states_to_remove:list=['AK', 'PR', 'HI'], pop_level:int=None, weekends:bool=True, state_level:bool=False): 
     """
     Function reads in the csv designated by the file path (fpath) and returns a dataframe with the 
     all counties and a series that contains the states for each county.
