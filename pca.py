@@ -4,20 +4,23 @@ from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import geopandas as gpd
 import numpy as np
-
-# hardcoded fips codes, I was too lazy to come up with a fancy solution
-states = [ i.zfill(2) for i in ['11','2', '1', '4', '5', '6', '8', '9', '10', '12', '13', '15', '16', '17', '18', '19', '20', '21', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42', '44', '45', '46', '47', '48', '49', '50', '51', '53', '54', '55', '56', '22']]
-lower_48 = [i.zfill(2) for i in ['11', '1', '4', '5', '6', '8', '9', '10', '12', '13', '16', '17', '18', '19', '20', '21', '23', '24', '25', '26', '27', '28', '29', '30', '31', '32', '33', '34', '35', '36', '37', '38', '39', '40', '41', '42', '44', '45', '46', '47', '48', '49', '50', '51', '53', '54', '55', '56', '22']]
+from utils import read_data
 
 cwd = os.path.dirname(os.path.abspath(__file__))
 if not os.path.exists(os.path.join(os.getcwd(), 'Outputs')):
     os.mkdir(os.path.join(cwd, 'Outputs'))
 
 
-def write_shape_file(outName, df):
+def write_shape_file(outName, df, state_level=False):
     print('Starting write.')
     shp = gpd.read_file(os.path.join(cwd, 'extras', 'tl_2017_us_county', 'tl_2017_us_county.shp'))
-    shp['FIPS'] = shp['STATEFP'] + shp['COUNTYFP']
+    
+    if not state_level:
+        shp['FIPS'] = shp['STATEFP'] + shp['COUNTYFP']
+    else:
+        shp['FIPS'] = shp['STATEFP']
+        shp = shp.dissolve(by='FIPS') #temporary, just merges the counties to state level. I can remove this after I save the state file
+
     df = df.copy()
 
     pcs = len(df.columns)
@@ -26,42 +29,37 @@ def write_shape_file(outName, df):
 
     # only use the first 3 principal components as the rgb colors 
     df[['R','B','G']] = (df[['PC_{}_Normalized'.format(i) for i in range(1,4)]] * 255).astype(int)
-
     shp = shp.merge(df, left_on='FIPS', right_index=True, how='left')
-
+    print(df)
     shp.to_file(os.path.join(cwd, 'Outputs', outName))
     print('Done writing {}.'.format(outName))
 
 
-
 data_path = os.path.join(cwd, 'Outputs', 'percent increase.csv')
 save_path = os.path.join(cwd, 'Outputs')
-data = pd.read_csv(data_path, converters={'FIPS':lambda x:str(int(x)).zfill(5)}) 
-data = data.dropna() #remove any cells that have N/a becuase PCA focuses on 0's so we can't just fill it
 
 
-# removing extra counties, comment if you don't want it. Also change to lower_48 if you only want to 
-data = data[(data.FIPS.str.slice(0,2).isin(states))]
+data, states = read_data(data_path, weekends=False, state_level=False, pop_level=250000)
+print(data.shape)
+data = data.dropna() # make sure there are no null values when training
 
-
-# Removing weekends, comment out these two lines if you don't want it
-data = data.set_index('FIPS').T
-data = pd.concat([data[i:i+7][1:6] for i in range(0,len(data.index),7)] ).T.reset_index()
 
 # The title for the output shapefile
-title = 'All Data No Weekends'
+title = 'Counties 250k or more pop with weekends'
 
 # you can change the number of components to however many you want
 components = 3
 clf = PCA(n_components=components)
-clf.fit(data.drop('FIPS', axis=1))
-X = clf.transform(data.drop('FIPS', axis=1))
+clf.fit(data)
+X = clf.transform(data)
 
 # create a dataframe from the model outputs 
-output = pd.DataFrame(X, index=data['FIPS'], columns=['PCA_{}_Raw'.format(i) for i in range(1, components+1)])
+output = pd.DataFrame(X, index=data.index, columns=['PCA_{}_Raw'.format(i) for i in range(1, components+1)])
+
 
 # write the output to a shapefile
-write_shape_file('{}.shp'.format(title), output)
+# write_shape_file('{}.shp'.format(title), output, state_level=True)
+
 
 # FOR PLOTTING THE EXPLAINED VARIANCE WITH THE NUMBER OF FEATURES 
 var=np.cumsum(np.round(clf.explained_variance_ratio_, decimals=3)*100)
@@ -87,7 +85,7 @@ for col in output.columns:
     inverse.append(temp)
 
 # Create a dataframe from the inverse transformation that is back into the time series space and plot each of the principal components
-inverse = pd.DataFrame(clf.inverse_transform(inverse), columns=data.drop('FIPS', axis=1).columns, index=['PC_{}'.format(i) for i in range(1,components+1)]).T
+inverse = pd.DataFrame(clf.inverse_transform(inverse), columns=data.columns, index=['PC_{}'.format(i) for i in range(1,components+1)]).T
 inverse.plot()
 plt.title(title)
 plt.show()
