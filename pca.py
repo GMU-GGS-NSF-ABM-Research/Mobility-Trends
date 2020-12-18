@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import geopandas as gpd
 import numpy as np
 from scipy import stats
+from sklearn.cluster import KMeans
+from sklearn.metrics import confusion_matrix, accuracy_score, silhouette_score
 from utils import read_data
 
 cwd = os.path.dirname(os.path.abspath(__file__))
@@ -76,6 +78,21 @@ X = clf.transform(outliers_rm)
 output = pd.DataFrame(X, index=outliers_rm.index, columns=['PCA_{}_Raw'.format(i) for i in range(1, components+1)])
 
 
+results = {'Silhouettes':[], 'Distortion':[]}
+for i in range(2, 16):
+    clf = KMeans(n_clusters=i)
+    clf.fit(output)
+    clusters = clf.predict(output)
+    results['Silhouettes'].append(silhouette_score(output, clusters))
+    results['Distortion'].append(clf.inertia_)
+    
+test = pd.DataFrame(results, index=range(2,16))
+print(test)
+test.plot(y='Silhouettes')
+plt.show()
+test.plot(y='Distortion')
+plt.show()
+exit()
 corr_data = pd.read_csv(os.path.join(cwd, 'Data', 'corr_data.csv'), index_col=0, converters={'FIPS':lambda x:str(x).zfill(5)}).set_index('FIPS', drop=True)
 corr_data = pd.merge(output, corr_data, right_index=True, left_index=True )
 
