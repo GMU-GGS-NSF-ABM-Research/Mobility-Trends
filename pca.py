@@ -4,6 +4,7 @@ from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import geopandas as gpd
 import numpy as np
+from scipy import stats
 from utils import read_data
 
 cwd = os.path.dirname(os.path.abspath(__file__))
@@ -39,8 +40,8 @@ data_path = os.path.join(cwd, 'Data', 'mobility percent difference.csv')
 save_path = os.path.join(cwd, 'Outputs')
 
 
-title = 'Lower 48 With Weekends 100k Pop'
-data, states = read_data(data_path, weekends=True, state_level=False, pop_level=100000)
+title = 'Lower 48 No Weekends'
+data, states = read_data(data_path, weekends=False, state_level=False, pop_level=None)
 print('Analysis Type: {}'.format(title))
 print('Counties: {}, Days: {}\n'.format(*data.shape))
 data = data.dropna() # make sure there are no null values when training
@@ -48,7 +49,7 @@ data = data.dropna() # make sure there are no null values when training
 
 # The title for the output shapefile
 
-# you can change the number of components to however many you want
+# train the original model 
 components = 3
 clf = PCA(n_components=components)
 clf.fit(data)
@@ -57,12 +58,23 @@ X = clf.transform(data)
 # create a dataframe from the model outputs 
 output = pd.DataFrame(X, index=data.index, columns=['PCA_{}_Raw'.format(i) for i in range(1, components+1)])
 
-# plot the histograms of eacg principal component to visually identify outliers
+# remove outliers that are above 3 std away from mean and transform back into original space
+outliers_rm = output[(np.abs(stats.zscore(output)) < 3).all(axis=1)]
+outliers_rm = pd.DataFrame(clf.inverse_transform(outliers_rm), columns=data.columns, index=outliers_rm.index )
+
+
 # fix, ax = plt.subplots(3)
 # for col, _ax in zip(output.columns, ax.ravel()):
 #     output[col].hist(ax=_ax)
 #     _ax.set_title(col)
 # plt.show()
+
+# train the model with outliers removed
+clf = PCA(n_components=components)
+clf.fit(outliers_rm)
+X = clf.transform(outliers_rm)
+output = pd.DataFrame(X, index=outliers_rm.index, columns=['PCA_{}_Raw'.format(i) for i in range(1, components+1)])
+
 
 corr_data = pd.read_csv(os.path.join(cwd, 'Data', 'corr_data.csv'), index_col=0, converters={'FIPS':lambda x:str(x).zfill(5)}).set_index('FIPS', drop=True)
 corr_data = pd.merge(output, corr_data, right_index=True, left_index=True )
@@ -74,8 +86,8 @@ print(corr_data.corr().filter(focus_cols).drop(focus_cols))
 # write the output to a shapefile
 # write_shape_file('{}.shp'.format(title), output, state_level=True)
 
-# FOR PLOTTING THE EXPLAINED VARIANCE WITH THE NUMBER OF FEATURES 
 
+# FOR PLOTTING THE EXPLAINED VARIANCE WITH THE NUMBER OF FEATURES 
 var=np.cumsum(np.round(clf.explained_variance_ratio_, decimals=3)*100)
 plt.plot([i for i in range(1,components+1)],var)
 plt.grid()
