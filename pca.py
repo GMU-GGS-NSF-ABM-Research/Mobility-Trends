@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import geopandas as gpd
 import numpy as np
 from scipy import stats
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, DBSCAN, AgglomerativeClustering
 from sklearn.metrics import confusion_matrix, accuracy_score, silhouette_score
 from utils import read_data
 
@@ -78,21 +78,44 @@ X = clf.transform(outliers_rm)
 output = pd.DataFrame(X, index=outliers_rm.index, columns=['PCA_{}_Raw'.format(i) for i in range(1, components+1)])
 
 
-results = {'Silhouettes':[], 'Distortion':[]}
-for i in range(2, 16):
-    clf = KMeans(n_clusters=i)
-    clf.fit(output)
-    clusters = clf.predict(output)
-    results['Silhouettes'].append(silhouette_score(output, clusters))
-    results['Distortion'].append(clf.inertia_)
+# output = (output - output.min())  / (output.max() - output.min())
+
+
+# PROBABLY GOING TO RUN THIS Hierarchical CLUSTERING METHOD IN THE FUTURE
+# clf = AgglomerativeClustering(n_clusters=3, affinity='manhattan')
+
+
+# 3D PLOTTING SECTION
+# from mpl_toolkits.mplot3d import Axes3D
+# fig = plt.figure()
+# ax = fig.add_subplot(111, projection='3d')
+
+# ax.scatter(xs=output['PCA_1_Raw'], ys=output['PCA_2_Raw'], zs=output['PCA_3_Raw'])
+# plt.show()
+
+# TRIED DBSCAN, ONLY EVER FOUND ONE CLUSTER
+# for i in range(1,11):
+#     db = DBSCAN(eps=i/10, min_samples=10).fit(output)
+#     labels = db.labels_
+#     n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
+#     print(n_clusters_)
+
+# results = {'Silhouettes':[], 'Distortion':[]}
+# for i in range(2, 16):
+#     clf = KMeans(n_clusters=i)
+#     clf.fit(output)
+#     clusters = clf.predict(output)
+#     results['Silhouettes'].append(silhouette_score(output, clusters))
+#     results['Distortion'].append(clf.inertia_)
     
-test = pd.DataFrame(results, index=range(2,16))
-print(test)
-test.plot(y='Silhouettes')
-plt.show()
-test.plot(y='Distortion')
-plt.show()
+# test = pd.DataFrame(results, index=range(2,16))
+# print(test)
+# test.plot(y='Silhouettes')
+# plt.show()
+# test.plot(y='Distortion')
+# plt.show()
 exit()
+
 corr_data = pd.read_csv(os.path.join(cwd, 'Data', 'corr_data.csv'), index_col=0, converters={'FIPS':lambda x:str(x).zfill(5)}).set_index('FIPS', drop=True)
 corr_data = pd.merge(output, corr_data, right_index=True, left_index=True )
 
