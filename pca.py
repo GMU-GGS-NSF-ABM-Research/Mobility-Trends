@@ -75,44 +75,51 @@ outliers_rm = pd.DataFrame(clf.inverse_transform(outliers_rm), columns=data.colu
 clf = PCA(n_components=components)
 clf.fit(outliers_rm)
 X = clf.transform(outliers_rm)
-output = pd.DataFrame(X, index=outliers_rm.index, columns=['PCA_{}_Raw'.format(i) for i in range(1, components+1)])
+output = pd.DataFrame(X, index=outliers_rm.index, columns=['PCA_{}_Norm'.format(i) for i in range(1, components+1)])
 
 
-# output = (output - output.min())  / (output.max() - output.min())
+output = (output - output.min())  / (output.max() - output.min())
 
 
 # PROBABLY GOING TO RUN THIS Hierarchical CLUSTERING METHOD IN THE FUTURE
-# clf = AgglomerativeClustering(n_clusters=3, affinity='manhattan')
+clf = AgglomerativeClustering(n_clusters=3, affinity='euclidean', linkage='ward')
+output['heir_clusters'] = clf.fit_predict(output)
 
+
+clf = KMeans(n_clusters=3)
+clf.fit(output)
+output['k_clusters'] = clf.predict(output)
+
+
+print('Starting write.')
+shp = gpd.read_file(os.path.join(cwd, 'Data', 'Base Shape Files', 'counties.shp'))
+shp = shp.merge(output, left_on='FIPS', right_index=True, how='left')
+shp.to_file(os.path.join(cwd, 'Outputs', 'Clusters.shp'))
+print('Done Writing.')
+
+# FOR TESTING HOW MANY CLUSTERS WE SHOULD USE WITH K-MEANS
+# results = {'Silhouettes':[], 'Distortion':[]}
+# for i in range(2, 16):
+# results['Silhouettes'].append(silhouette_score(output, clusters))
+# results['Distortion'].append(clf.inertia_)
+
+# PLOT THE ACCURACY FROM THE CLUSTERING 
+# test = pd.DataFrame(results, index=range(2,16))
+# print(test)
+# test.plot(y='Silhouettes')
+# plt.show()
+# test.plot(y='Distortion')
+# plt.show()
 
 # 3D PLOTTING SECTION
 # from mpl_toolkits.mplot3d import Axes3D
 # fig = plt.figure()
 # ax = fig.add_subplot(111, projection='3d')
 
-# ax.scatter(xs=output['PCA_1_Raw'], ys=output['PCA_2_Raw'], zs=output['PCA_3_Raw'])
-# plt.show()
-
-# TRIED DBSCAN, ONLY EVER FOUND ONE CLUSTER
-# for i in range(1,11):
-#     db = DBSCAN(eps=i/10, min_samples=10).fit(output)
-#     labels = db.labels_
-#     n_clusters_ = len(set(labels)) - (1 if -1 in labels else 0)
-#     print(n_clusters_)
-
-# results = {'Silhouettes':[], 'Distortion':[]}
-# for i in range(2, 16):
-#     clf = KMeans(n_clusters=i)
-#     clf.fit(output)
-#     clusters = clf.predict(output)
-#     results['Silhouettes'].append(silhouette_score(output, clusters))
-#     results['Distortion'].append(clf.inertia_)
-    
-# test = pd.DataFrame(results, index=range(2,16))
-# print(test)
-# test.plot(y='Silhouettes')
-# plt.show()
-# test.plot(y='Distortion')
+# ax.scatter(xs=output['PCA_1_Norm'], ys=output['PCA_2_Norm'], zs=output['PCA_3_Norm'], c=output['clusters'])
+# ax.set_xlabel('PC 1')
+# ax.set_ylabel('PC 2')
+# ax.set_zlabel('PC 3')
 # plt.show()
 exit()
 
