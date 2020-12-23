@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import geopandas as gpd
 import numpy as np
 from scipy import stats
-from sklearn.cluster import KMeans, DBSCAN, AgglomerativeClustering
+from sklearn.cluster import KMeans, AgglomerativeClustering
 from sklearn.metrics import confusion_matrix, accuracy_score, silhouette_score
 from utils import read_data
 
@@ -16,14 +16,12 @@ if not os.path.exists(os.path.join(os.getcwd(), 'Outputs')):
 
 def write_shape_file(outName, df, state_level=False):
     print('Starting write.')
-    shp = gpd.read_file(os.path.join(cwd, 'extras', 'tl_2017_us_county', 'tl_2017_us_county.shp'))
     
     if not state_level:
-        shp['FIPS'] = shp['STATEFP'] + shp['COUNTYFP']
+        shp = gpd.read_file(os.path.join(cwd, 'Data', 'Base Shape Files', 'counties.shp'))
     else:
-        shp['FIPS'] = shp['STATEFP']
-        shp = shp.dissolve(by='FIPS') #temporary, just merges the counties to state level. I can remove this after I save the state file
-
+        shp = gpd.read_file(os.path.join(cwd, 'Data', 'Base Shape Files', 'states.shp'))
+    
     df = df.copy()
 
     pcs = len(df.columns)
@@ -33,7 +31,7 @@ def write_shape_file(outName, df, state_level=False):
     # only use the first 3 principal components as the rgb colors 
     df[['R','B','G']] = (df[['PC_{}_Normalized'.format(i) for i in range(1,4)]] * 255).astype(int)
     shp = shp.merge(df, left_on='FIPS', right_index=True, how='left')
-    print(df)
+
     shp.to_file(os.path.join(cwd, 'Outputs', outName))
     print('Done writing {}.'.format(outName))
 
@@ -42,14 +40,15 @@ data_path = os.path.join(cwd, 'Data', 'mobility percent difference.csv')
 save_path = os.path.join(cwd, 'Outputs')
 
 
-title = 'Lower 48 No Weekends'
+# The title for the output shapefile
+title = 'Lower 48 No Weekends State Level'
+
 data, states = read_data(data_path, weekends=False, state_level=False, pop_level=None)
 print('Analysis Type: {}'.format(title))
 print('Counties: {}, Days: {}\n'.format(*data.shape))
 data = data.dropna() # make sure there are no null values when training
 
 
-# The title for the output shapefile
 
 # train the original model 
 components = 3
@@ -81,15 +80,38 @@ output = pd.DataFrame(X, index=outliers_rm.index, columns=['PCA_{}_Norm'.format(
 output = (output - output.min())  / (output.max() - output.min())
 
 
-# PROBABLY GOING TO RUN THIS Hierarchical CLUSTERING METHOD IN THE FUTURE
-clf = AgglomerativeClustering(n_clusters=3, affinity='euclidean', linkage='ward')
-output['heir_clusters'] = clf.fit_predict(output)
+clf = AgglomerativeClustering(n_clusters=3, affinity='euclidean', linkage='complete')
+output['euc_comp'] = clf.fit_predict(output)
+    
 
 
+clf = AgglomerativeClustering(n_clusters=3, affinity='manhattan', linkage='complete')
+output['man_comp'] = clf.fit_predict(output)
+
+clf = AgglomerativeClustering(n_clusters=3, affinity='manhattan', linkage='average')
+output['man_avg'] = clf.fit_predict(output)
+
+clf = AgglomerativeClustering(n_clusters=3, affinity='euclidean', linkage='single')
+output['man_sing'] = clf.fit_predict(output)
+
+
+
+clf = AgglomerativeClustering(n_clusters=3, affinity='cosine', linkage='complete')
+output['cos_comp'] = clf.fit_predict(output)
+
+clf = AgglomerativeClustering(n_clusters=3, affinity='cosine', linkage='average')
+output['cos_avg'] = clf.fit_predict(output)
+
+clf = AgglomerativeClustering(n_clusters=3, affinity='cosine', linkage='single')
+output['cos_sing'] = clf.fit_predict(output)
+
+# Second clustering method
 clf = KMeans(n_clusters=3)
 clf.fit(output)
 output['k_clusters'] = clf.predict(output)
 
+
+print(output)
 
 print('Starting write.')
 shp = gpd.read_file(os.path.join(cwd, 'Data', 'Base Shape Files', 'counties.shp'))
