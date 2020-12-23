@@ -14,12 +14,14 @@ if not os.path.exists(os.path.join(os.getcwd(), 'Outputs')):
     os.mkdir(os.path.join(cwd, 'Outputs'))
 
 
-def write_shape_file(outName, df, state_level=False):
+def write_shape_file(outName, df, state_level=False, create_RGB=False):
     print('Starting write.')
     
     if not state_level:
+        # read the county level shape file
         shp = gpd.read_file(os.path.join(cwd, 'Data', 'Base Shape Files', 'counties.shp'))
     else:
+        # read the state level shape file
         shp = gpd.read_file(os.path.join(cwd, 'Data', 'Base Shape Files', 'states.shp'))
     
     df = df.copy()
@@ -76,7 +78,7 @@ clf.fit(outliers_rm)
 X = clf.transform(outliers_rm)
 output = pd.DataFrame(X, index=outliers_rm.index, columns=['PCA_{}_Norm'.format(i) for i in range(1, components+1)])
 
-
+# Normalize the data
 output = (output - output.min())  / (output.max() - output.min())
 
 
