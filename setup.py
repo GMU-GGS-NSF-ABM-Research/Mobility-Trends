@@ -7,8 +7,7 @@ for the rest of the analysis to run.
 '''
 
 import os
-import difference
-import aggregate_stay_at_home_data
+import utils
 reqs = []
 
 cwd = os.path.dirname(os.path.abspath(__file__))
@@ -16,9 +15,10 @@ cwd = os.path.dirname(os.path.abspath(__file__))
 def check_folder(folder_name):
     if not os.path.exists(os.path.join(cwd, folder_name)):
         os.mkdir(os.path.join(cwd, folder_name))
+        print('Created: .../{}/'.format(folder_name))
         return False
     else:
-        print('...{}/ exists'.format(folder_name))
+        print('Already exists: .../{}/'.format(folder_name))
         return True
 
 # create a Data folder for parsed data
@@ -44,8 +44,8 @@ if not os.path.exists(os.path.join(cwd, 'safegraph-data')):
 else:
     # if the data exisits then create aggregated data file structure and calculate the percent increase from baseline
     if not check_folder('safegraph-data/aggregated-patterns'):
-        aggregate_stay_at_home_data.main()
-        difference.main()
+        utils.aggregate_stay_at_home_data()
+        utils.calculate_mobility_difference()
 
 
 if all(reqs):

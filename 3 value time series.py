@@ -9,7 +9,7 @@ data_path = os.path.join(cwd, 'Data', 'mobility percent difference.csv')
 
 # Set this variable true if you want weekends otherwise false
 weekends = False
-data, states = read_data(data_path, weekends=weekends)
+data, states = read_data(data_path, weekends=weekends, state_level=False, pop_level=None)
 
 # Make sure that if you don't include weekend when reading in the data that you don't include a weekend in the ranges 
 date_ranges = list(map(lambda x: x.split(', '), ['12-30, 03-16', '03-16, 06-01', '06-01, 10-09']))
