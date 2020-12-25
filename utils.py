@@ -17,7 +17,7 @@ def read_data(fpath:str, states_to_remove:list=['AK', 'PR', 'HI'], pop_level:int
     """
     data = pd.read_csv(fpath, converters={'FIPS':lambda x:str(x).zfill(5)}).set_index('FIPS')
     data = data[~data['state'].isin(states_to_remove)]
-    states = data['state']
+    # states = data['state']
 
     if pop_level:
         data = data[data['pop'] >= pop_level]
@@ -31,13 +31,36 @@ def read_data(fpath:str, states_to_remove:list=['AK', 'PR', 'HI'], pop_level:int
 
     if state_level:
         data = data.groupby(data.index.str.slice(0,2)).mean()
-        states = states.groupby(states.index.str.slice(0,2)).max()
+        # states = states.groupby(states.index.str.slice(0,2)).max()
     
-    return data, states
 
+    return data
 
+def reindex_with_placename(df, just_state=False):
+    '''
+    Function that takes a single dataframe with FIPS as its index and reindexes it with the corresponding 
+    county and state-name. 
+
+    Returns the same dataframe with a new index of place-names.
+    '''
+    cwd = os.path.dirname(os.path.abspath(__file__))
+    county_info = pd.read_csv(os.path.join(cwd, 'safegraph-data', 'safegraph_open_census_data', 'metadata', 'cbg_fips_codes.csv'), converters={'state_fips':lambda x :str(x).zfill(2), 'county_fips':lambda x:str(x).zfill(3)})
+    county_info['FIPS']= county_info['state_fips'] + county_info['county_fips']
+    if just_state:
+        county_info['Name'] = county_info['state']
+    else:
+        county_info['Name'] = county_info['county'] + ', ' + county_info['state']
+    county_info = county_info.set_index('FIPS').drop(['state_fips', 'county_fips', 'class_code', 'county', 'state'], axis=1)
+
+    return pd.merge(df, county_info, left_index=True, right_index=True).set_index('Name')
+    
 
 def aggregate_stay_at_home_data():
+    '''
+    This function aggregates the safegraph data up to a county level, only keeping the columns that are of interest.
+    It takes quite a while to run, but it prints to the screen what percentage has been completed. It will create an
+    identical file structure to the original safegraph data and it will be stored in .../safegraph-data/aggregated-patterns
+    '''
     print('Starting to parse files, about 10 minutes or so.\n')
     start_time = time.time()
     cwd = os.path.dirname(os.path.abspath(__file__))
