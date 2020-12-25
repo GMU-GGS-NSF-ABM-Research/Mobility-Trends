@@ -45,7 +45,7 @@ save_path = os.path.join(cwd, 'Outputs')
 # The title for the output shapefile
 title = 'Lower 48 No Weekends State Level'
 
-data, states = read_data(data_path, weekends=False, state_level=False, pop_level=None)
+data = read_data(data_path, weekends=False, state_level=False, pop_level=None)
 print('Analysis Type: {}'.format(title))
 print('Counties: {}, Days: {}\n'.format(*data.shape))
 data = data.dropna() # make sure there are no null values when training
@@ -115,11 +115,11 @@ output['k_clusters'] = clf.predict(output)
 
 print(output)
 
-print('Starting write.')
-shp = gpd.read_file(os.path.join(cwd, 'Data', 'Base Shape Files', 'counties.shp'))
-shp = shp.merge(output, left_on='FIPS', right_index=True, how='left')
-shp.to_file(os.path.join(cwd, 'Outputs', 'Clusters.shp'))
-print('Done Writing.')
+# print('Starting write.')
+# shp = gpd.read_file(os.path.join(cwd, 'Data', 'Base Shape Files', 'counties.shp'))
+# shp = shp.merge(output, left_on='FIPS', right_index=True, how='left')
+# shp.to_file(os.path.join(cwd, 'Outputs', 'Clusters.shp'))
+# print('Done Writing.')
 
 # FOR TESTING HOW MANY CLUSTERS WE SHOULD USE WITH K-MEANS
 # results = {'Silhouettes':[], 'Distortion':[]}

@@ -17,6 +17,6 @@ This script will perform a principal component analysis on the time-series outpu
 This script is a naive approach to what `PCA.py` is attempting to do by describing the reduction in non-home-dwell-time by three simple values. A "pre-lockdown" period, "initial-lockdown" period, and a "post-lockdown" period are described for each county in the dataset and can be sampled and plotted or can be built upon. 
 
 
-- `utils.py, aggregate_stay_at_home_data.py, and difference.py`
+- `utils.py`
 
-These are all essentially utilities that help with the analysis carried out above. 
+These are all function that help to manipulate the datasets, wither through pre-processing or reading in the data for analysis. 
