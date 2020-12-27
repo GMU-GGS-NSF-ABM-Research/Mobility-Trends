@@ -2,6 +2,7 @@ import pandas as pd
 import os
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
+import matplotlib.colors as colors
 import geopandas as gpd
 import numpy as np
 from scipy import stats
@@ -14,7 +15,7 @@ if not os.path.exists(os.path.join(os.getcwd(), 'Outputs')):
     os.mkdir(os.path.join(cwd, 'Outputs'))
 
 
-def write_shape_file(outName, df, state_level=False):
+def read_shape_file(df, state_level=False):
     print('Starting write.')
     
     if not state_level:
@@ -26,12 +27,12 @@ def write_shape_file(outName, df, state_level=False):
     
     df = df.copy()
 
-    # only use the first 3 principal components as the rgb colors 
-    df[['R','B','G']] = (df[['PC_{}_Norm'.format(i) for i in range(1,4)]] * 255).astype(int)
     shp = shp.merge(df, left_on='FIPS', right_index=True, how='left')
 
-    shp.to_file(os.path.join(cwd, 'Outputs', outName))
-    print('Done writing {}.'.format(outName))
+    # make a column with hex codes from the three principal components, N/a is filled with black 
+    shp['color'] = shp.apply(lambda x : colors.to_hex(tuple(x[['PC_1_Norm', 'PC_2_Norm', 'PC_3_Norm']].fillna(0))) , axis=1)
+    return shp
+    # shp.to_file(os.path.join(cwd, 'Outputs', outName))
 
 
 def inverse_principal_components(df, model):
@@ -80,10 +81,11 @@ save_path = os.path.join(cwd, 'Outputs')
 
 # The title for the output shapefile
 title = 'Lower 48 No Weekends State Level'
+show_plots = False
 
 data = read_data(data_path, weekends=False, state_level=False, pop_level=None)
 print('Analysis Type: {}'.format(title))
-print('Counties: {}, Days: {}\n'.format(*data.shape))
+print('Counties: {}, Days: {}'.format(*data.shape))
 data = data.dropna() # make sure there are no null values when training
 
 
@@ -100,11 +102,12 @@ output = pd.DataFrame(X, index=data.index, columns=['PCA_{}_Raw'.format(i) for i
 
 
 # Show what the original principal components look like before removing outliers, as well as plotting the histograms for the data
-inv = inverse_principal_components(output, clf)
-ax1 = inv.T.plot()
-ax1.set_title('Including Outliers')
-plot_histograms(output, 'Including Outliers')
-plot_model_accuracy(clf, 'Including Outliers', components)
+if show_plots:
+    inv = inverse_principal_components(output, clf)
+    ax1 = inv.T.plot()
+    ax1.set_title('Including Outliers')
+    plot_histograms(output, 'Including Outliers')
+    plot_model_accuracy(clf, 'Including Outliers', components)
 
 
 # remove outliers that are above 3 std away from mean 
@@ -112,21 +115,23 @@ outliers_rm = output[(np.abs(stats.zscore(output)) < 3).all(axis=1)]
 # create a dataframe from transforming back into original space
 outliers_rm = pd.DataFrame(clf.inverse_transform(outliers_rm), columns=data.columns, index=outliers_rm.index )
 
+print('Counties Lost From Removing Outliers: {}\n'.format(len(data.index) - len(outliers_rm.index)))
 
 # train the model with outliers removed
 clf = PCA(n_components=components)
 clf.fit(outliers_rm)
 X = clf.transform(outliers_rm)
-output = pd.DataFrame(X, index=outliers_rm.index, columns=['PCA_{}_Norm'.format(i) for i in range(1, components+1)])
+output = pd.DataFrame(X, index=outliers_rm.index, columns=['PC_{}_Norm'.format(i) for i in range(1, components+1)])
 
 # Show what the principal components look like after removing outliers and retraining
-inv = inverse_principal_components(output, clf)
-ax2 = inv.T.plot()
-ax2.set_title('Outliers Removed')
-plot_histograms(output, 'Outliers Removed')
-plot_model_accuracy(clf, 'Outliers Removed', components)
+if show_plots:
+    inv = inverse_principal_components(output, clf)
+    ax2 = inv.T.plot()
+    ax2.set_title('Outliers Removed')
+    plot_histograms(output, 'Outliers Removed')
+    plot_model_accuracy(clf, 'Outliers Removed', components)
+    plt.show()
 
-plt.show()
 # Normalize data
 output = (output - output.min())  / (output.max() - output.min())
 
@@ -135,7 +140,10 @@ clf = KMeans(n_clusters=3)
 clf.fit(output)
 output['k_clusters'] = clf.predict(output)
 
-
+# plotting the shapefile using the color created from the 3 pricipal components
+shp = read_shape_file(output)
+shp.plot(color=shp['color'])
+plt.show()
 
 # FOR TESTING HOW MANY CLUSTERS WE SHOULD USE WITH K-MEANS
 # results = {'Silhouettes':[], 'Distortion':[]}
