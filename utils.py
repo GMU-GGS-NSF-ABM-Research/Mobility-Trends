@@ -158,6 +158,12 @@ def aggregate_stay_at_home_data():
 # print(Week(2020, 1, 'cdc').startdate(), Week.fromdate(date(2020, 10, 10)))
 
 def calculate_mobility_difference():
+    '''
+    This function uses the paresed safegraph data to calculate the differnce is median-non-home-dwell time when
+    compared to the average of 2019. 2020 uses epiweeks so it includes a few days in 2019 when it is read in. 
+
+    Saves two CSV's, one of the simple difference from the 2019 year average 
+    '''
     print('Starting to calculate county mobility decrease from a baseline.')
     cwd = os.path.dirname(os.path.abspath(__file__))
 
