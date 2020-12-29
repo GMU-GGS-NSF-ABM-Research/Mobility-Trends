@@ -16,7 +16,7 @@ if not os.path.exists(os.path.join(os.getcwd(), 'Outputs')):
 
 
 def read_shape_file(df, state_level=False):
-    print('Starting write.')
+    print('Reading shapefile.')
     
     if not state_level:
         # read the county level shape file
@@ -82,12 +82,12 @@ save_path = os.path.join(cwd, 'Outputs')
 # The title for the output shapefile
 title = 'Lower 48 No Weekends State Level'
 show_plots = False
+state_level = True
 
-data = read_data(data_path, weekends=False, state_level=False, pop_level=None)
+data = read_data(data_path, weekends=False, pop_level=None)
 print('Analysis Type: {}'.format(title))
 print('Counties: {}, Days: {}'.format(*data.shape))
 data = data.dropna() # make sure there are no null values when training
-
 
 
 # train the original model 
@@ -98,7 +98,7 @@ X = clf.transform(data)
 
 # create a dataframe from the model outputs, don't normalize at this step becuase we have to transform back into
 # the original data space.
-output = pd.DataFrame(X, index=data.index, columns=['PCA_{}_Raw'.format(i) for i in range(1, components+1)])
+output = pd.DataFrame(X, index=data.index, columns=['PC_{}_Norm'.format(i) for i in range(1, components+1)])
 
 
 # Show what the original principal components look like before removing outliers, as well as plotting the histograms for the data
@@ -112,10 +112,18 @@ if show_plots:
 
 # remove outliers that are above 3 std away from mean 
 outliers_rm = output[(np.abs(stats.zscore(output)) < 3).all(axis=1)]
+outliers = output[~(np.abs(stats.zscore(output)) < 3).all(axis=1)].index.values
+
+
 # create a dataframe from transforming back into original space
 outliers_rm = pd.DataFrame(clf.inverse_transform(outliers_rm), columns=data.columns, index=outliers_rm.index )
 
 print('Counties Lost From Removing Outliers: {}\n'.format(len(data.index) - len(outliers_rm.index)))
+
+# agg to state level if true after removing outliers
+if state_level:
+    outliers_rm = outliers_rm.groupby(outliers_rm.index.str.slice(0,2)).mean()
+
 
 # train the model with outliers removed
 clf = PCA(n_components=components)
@@ -140,9 +148,21 @@ clf = KMeans(n_clusters=3)
 clf.fit(output)
 output['k_clusters'] = clf.predict(output)
 
+shp = read_shape_file(output, state_level=state_level)
 # plotting the shapefile using the color created from the 3 pricipal components
-shp = read_shape_file(output)
-shp.plot(color=shp['color'])
+
+
+# base = shp.plot(color=shp['color'], zorder=1)
+
+# for plotting the k-means outputs
+
+# plot the outliers with grey hashes, only show them if plotting at a county level
+if not state_level:
+    base = shp.plot(column='k_clusters',cmap='copper', missing_kwds={'color': 'black'})
+    shp[shp['FIPS'].isin(outliers)].plot(ax=base, color='lightgrey', linewidth=0.1, edgecolor='black',zorder=2, hatch='///')
+else:
+    shp.plot(column='k_clusters',cmap='copper')
+
 plt.show()
 
 # FOR TESTING HOW MANY CLUSTERS WE SHOULD USE WITH K-MEANS
@@ -169,11 +189,11 @@ plt.show()
 # ax.set_ylabel('PC 2')
 # ax.set_zlabel('PC 3')
 # plt.show()
+if not state_level:
+    corr_data = pd.read_csv(os.path.join(cwd, 'Data', 'corr_data.csv'), index_col=0, converters={'FIPS':lambda x:str(x).zfill(5)}).set_index('FIPS', drop=True)
+    corr_data = pd.merge(output, corr_data, right_index=True, left_index=True )
 
-corr_data = pd.read_csv(os.path.join(cwd, 'Data', 'corr_data.csv'), index_col=0, converters={'FIPS':lambda x:str(x).zfill(5)}).set_index('FIPS', drop=True)
-corr_data = pd.merge(output, corr_data, right_index=True, left_index=True )
-
-focus_cols = output.columns
-# print the pearson's R value for each of the principal components
-print(corr_data.corr().filter(focus_cols).drop(focus_cols))
+    focus_cols = output.columns
+    # print the pearson's R value for each of the principal components
+    print(corr_data.corr().filter(focus_cols).drop(focus_cols))
 

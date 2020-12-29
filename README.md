@@ -20,3 +20,7 @@ This script is a naive approach to what `PCA.py` is attempting to do by describi
 - `utils.py`
 
 These are all function that help to manipulate the datasets, wither through pre-processing or reading in the data for analysis. 
+
+
+
+A quick aside, the Open-Census-Data provided by Safe-Graph does not include a FIPS code for Oglala Lakota County, SD so you must edit the cbg_fips_codes.csv in the metadata for the census data. The entry should be as follows: state = SD, state_fips = 46, county_fips = 102, county = Oglala Lakota County, class_code = H1   

@@ -17,14 +17,14 @@ def read_data(fpath:str, states_to_remove:list=['AK', 'PR', 'HI'], pop_level:int
     """
     data = pd.read_csv(fpath, converters={'FIPS':lambda x:str(x).zfill(5)}).set_index('FIPS')
     data = data[~data['state'].isin(states_to_remove)]
-    # states = data['state']
 
     if pop_level:
         data = data[data['pop'] >= pop_level]
         
     data = data.drop(['state', 'pop'], axis=1)
+    # Only use full weeks, the start will always be a full week and the ending is the only variable so just subtract the remainder
+    data = data.iloc[:,:len(data.columns)-(len(data.columns)%7)]
     
-
     if not weekends:
         data = data.T
         data = pd.concat([data[i:i+7][1:6] for i in range(0,len(data.index),7)] ).T
@@ -150,13 +150,6 @@ def aggregate_stay_at_home_data():
     print('Total Time : {:.2f}s\n'.format(time.time()-start_time))
 
 
-# I used this just to see when the first epiweek in 2020 was, we only have data up until 2020-10-10 which is the end
-# of EpiWeek 41
-
-# from epiweeks import Week, Year
-# from datetime import date
-# print(Week(2020, 1, 'cdc').startdate(), Week.fromdate(date(2020, 10, 10)))
-
 def calculate_mobility_difference():
     '''
     This function uses the paresed safegraph data to calculate the differnce is median-non-home-dwell time when
@@ -189,7 +182,7 @@ def calculate_mobility_difference():
             # adds the days that start epiweek #1 in 2019 to the ouput (hardcoded but doesn't change so it doesn't matter)
             fpath = os.path.join(path, '2019', '12')
             for day in range(29, 32):
-                days['{}-{}'.format('12',day)] = pd.read_csv(os.path.join(fpath, str(day), fname.format(2019, 12, day)) ,converters={0: lambda x:str(int(x)).zfill(5)}).rename(columns={'Unnamed: 0' :'FIPS'}).set_index('FIPS')[target_col]
+                days['{}-{}-19'.format('12',day)] = pd.read_csv(os.path.join(fpath, str(day), fname.format(2019, 12, day)) ,converters={0: lambda x:str(int(x)).zfill(5)}).rename(columns={'Unnamed: 0' :'FIPS'}).set_index('FIPS')[target_col]
         
 
         # Data from aggregation is stored in ...Year/Month/Day/file.csv 
@@ -198,7 +191,7 @@ def calculate_mobility_difference():
         for month in os.listdir(fpath):     
             for day in os.listdir(os.path.join(fpath, month)):
                 # read in the csv with, set the index as fips and get a series with only the target column
-                days['{}-{}'.format(month,day)] = pd.read_csv(os.path.join(fpath, month, day, fname.format(year, month, day)),converters={0: lambda x:str(int(x)).zfill(5)}).rename(columns={'Unnamed: 0' :'FIPS'}).set_index('FIPS')[target_col]
+                days['{}-{}-{}'.format(month,day,year[2:])] = pd.read_csv(os.path.join(fpath, month, day, fname.format(year, month, day)),converters={0: lambda x:str(int(x)).zfill(5)}).rename(columns={'Unnamed: 0' :'FIPS'}).set_index('FIPS')[target_col]
 
         # return a df with all of the days in the year as columns, rows are counties
         return pd.DataFrame(days)

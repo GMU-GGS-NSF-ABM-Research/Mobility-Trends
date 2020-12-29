@@ -8,28 +8,25 @@ cwd = os.path.dirname(os.path.abspath(__file__))
 data_path = os.path.join(cwd, 'Data', 'mobility percent difference.csv')
 
 # Set this variable true if you want weekends otherwise false
-weekends = True
+weekends = False
 data = read_data(data_path, weekends=weekends, state_level=False, pop_level=None)
 
 # These are the selected date ranges 
-date_ranges = list(map(lambda x: x.split(', '), ['12-30, 03-16', '03-16, 06-01', '06-01, 10-09']))
-
+date_ranges = list(map(lambda x: x.split(' - '), ['12-30-19 - 03-16-20', '03-16-20 - 06-01-20', '06-01-20 - ']))
 
 def is_weekend(in_dates):
     '''
     Function just checks if a date is a weekend or not and returns a list of dates that are weekends.
-
-    - only checks dates in 2020 (hardcoded for the most part)
-    - the data only goes back to 12-29 which is a sunday so that's also hardcoded
     '''
     weekends = []
-    for _date in in_dates:    
-        month, day = _date.split('-')
-        if _date == '12-29':
-            weekends.append(_date)
-        if date(2020, int(month), int(day)).weekday()> 4 :
-            weekends.append(_date)
-         
+    for _date in in_dates:
+
+        try:
+            month, day, year = _date.split('-')
+            if date(int('20'+year), int(month), int(day)).weekday()> 4 :
+                weekends.append(_date)
+        except:
+            return weekends
     return weekends
 
 if not weekends:
@@ -49,7 +46,10 @@ def create_avg_df(df, start_date, end_date):
     Function slices the original time series data from the start data to the end date and returns a  
     new time series like dataframe with the average from that time period
     '''
-    target =  df.loc[:,start_date:end_date]
+    if end_date:
+        target =  df.loc[:,start_date:end_date]
+    else:
+        target = df.loc[:,start_date:]
     return pd.DataFrame().reindex_like(target).fillna(0).add(target.mean(axis=1), axis=0)
 
 
@@ -62,7 +62,9 @@ avgs = reindex_with_placename(pd.concat([create_avg_df(data, start, stop) for st
 # Plotting section
 # The US average will be plotted as a black line on the bottom for each plot. 
 ax = avgs.mean(axis=0).T.plot(style='--', c='k', label='US Avg')
-# avgs.sample(5).T.plot(ax=ax)
-avgs.loc[['San Diego County, CA','Loudoun County, VA', 'Fairfax County, VA', 'Fairfax city, VA', 'Winchester city, VA', 'Jefferson County, WV']].T.plot(ax=ax)
+avgs.sample(5).T.plot(ax=ax)
+
+# 'Loudoun County, VA', 'Fairfax County, VA', 'Fairfax city, VA', 'Winchester city, VA', 'Jefferson County, WV'
+# avgs.loc[['Rockingham County, VA','Cambria County, PA', 'Somerset County, PA']].T.plot(ax=ax)
 plt.legend()
 plt.show()
