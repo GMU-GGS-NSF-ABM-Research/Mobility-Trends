@@ -26,7 +26,7 @@ def is_weekend(in_dates):
             if date(int('20'+year), int(month), int(day)).weekday()> 4 :
                 weekends.append(_date)
         except:
-            return weekends
+            continue
     return weekends
 
 if not weekends:
@@ -64,7 +64,5 @@ avgs = reindex_with_placename(pd.concat([create_avg_df(data, start, stop) for st
 ax = avgs.mean(axis=0).T.plot(style='--', c='k', label='US Avg')
 avgs.sample(5).T.plot(ax=ax)
 
-# 'Loudoun County, VA', 'Fairfax County, VA', 'Fairfax city, VA', 'Winchester city, VA', 'Jefferson County, WV'
-# avgs.loc[['Rockingham County, VA','Cambria County, PA', 'Somerset County, PA']].T.plot(ax=ax)
 plt.legend()
 plt.show()
