@@ -22,6 +22,7 @@ def read_data(fpath:str, states_to_remove:list=['AK', 'PR', 'HI'], pop_level:int
         data = data[data['pop'] >= pop_level]
         
     data = data.drop(['state', 'pop'], axis=1)
+    
     # Only use full weeks, the start will always be a full week and the ending is the only variable so just subtract the remainder
     data = data.iloc[:,:len(data.columns)-(len(data.columns)%7)]
     
@@ -30,9 +31,7 @@ def read_data(fpath:str, states_to_remove:list=['AK', 'PR', 'HI'], pop_level:int
         data = pd.concat([data[i:i+7][1:6] for i in range(0,len(data.index),7)] ).T
 
     if state_level:
-        data = data.groupby(data.index.str.slice(0,2)).mean()
-        # states = states.groupby(states.index.str.slice(0,2)).max()
-    
+        data = data.groupby(data.index.str.slice(0,2)).mean()    
 
     return data
 
@@ -220,3 +219,8 @@ def calculate_mobility_difference():
     out.to_csv(save_path + ' percent difference.csv') # save
 
     print('Done')
+
+
+def update_files():
+    aggregate_stay_at_home_data()
+    calculate_mobility_difference()

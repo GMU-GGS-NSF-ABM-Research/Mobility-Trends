@@ -17,6 +17,7 @@ A quick aside, the Open-Census-Data provided by Safe-Graph does not include a FI
 If any additional data is downloaded from Safe-Graph at a later date and you want to parse it, you can simply call the *aggregate_stay_at_home_data* function from `utils.py` script and it will parse any additional data without any reprocessing.   
 
 Two additional datasets are required for mapping results, one county level shapefile that contains a FIPS column with county and state FIPS along with a state level shapefile that contains a FIPS column with only the state FIPS. 
+* Must be stored in `../Data/Base Shape Files/`
 
 ## Usage
 
