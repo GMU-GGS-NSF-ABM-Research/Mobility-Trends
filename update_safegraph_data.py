@@ -72,4 +72,6 @@ def main():
         print('Up to date...')
     else:
         print('All files are done downloading...')
+        from utils import update_files
+        update_files()
 main()
