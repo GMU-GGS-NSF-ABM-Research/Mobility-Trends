@@ -6,7 +6,7 @@ import matplotlib.colors as colors
 import geopandas as gpd
 import numpy as np
 from scipy import stats
-from sklearn.cluster import KMeans, AgglomerativeClustering
+from sklearn.cluster import KMeans
 from sklearn.metrics import confusion_matrix, accuracy_score, silhouette_score
 from utils import read_data
 
@@ -15,7 +15,7 @@ if not os.path.exists(os.path.join(os.getcwd(), 'Outputs')):
     os.mkdir(os.path.join(cwd, 'Outputs'))
 
 
-def read_shape_file(df, state_level=False):
+def read_shape_file(df, state_level=False, save_name=False):
     print('Reading shapefile.')
     
     if not state_level:
@@ -31,6 +31,9 @@ def read_shape_file(df, state_level=False):
 
     # make a column with hex codes from the three principal components, N/a is filled with black 
     shp['color'] = shp.apply(lambda x : colors.to_hex(tuple(x[['PC_1_Norm', 'PC_2_Norm', 'PC_3_Norm']].fillna(0))) , axis=1)
+    
+    if save_name:
+        shp.to_file(os.path.join(cwd, 'Outputs', save_name+'.shp'))
     return shp
     # shp.to_file(os.path.join(cwd, 'Outputs', outName))
 
@@ -74,20 +77,26 @@ def plot_model_accuracy(model, title, components):
     ax.set_xlabel('Number of features')
     ax.set_title(title)
 
+# file = 'mobility percent difference.csv'
+# file = 'mobility window baseline difference.csv' 
+
+# file = 'mobility difference.csv'
+file = 'mobility window baseline difference.csv'
 
 
-data_path = os.path.join(cwd, 'Data', 'mobility percent difference.csv')
+data_path = os.path.join(cwd, 'Data', file)
 save_path = os.path.join(cwd, 'Outputs')
 
 # The title for the output shapefile
-title = 'Lower 48 No Weekends State Level'
-show_plots = False
-state_level = True
+title = 'Lower 48 7 Day Avg'
+show_plots = True
+state_level = False
 
-data = read_data(data_path, weekends=False, pop_level=None)
+data = read_data(data_path, pop_level=None)
+
 print('Analysis Type: {}'.format(title))
 print('Counties: {}, Days: {}'.format(*data.shape))
-data = data.dropna() # make sure there are no null values when training
+data = data.dropna(axis=1) # make sure there are no null values when training
 
 
 # train the original model 
@@ -95,6 +104,7 @@ components = 3
 clf = PCA(n_components=components)
 clf.fit(data)
 X = clf.transform(data)
+print('Explained Var:',sum(clf.explained_variance_ratio_))
 
 # create a dataframe from the model outputs, don't normalize at this step becuase we have to transform back into
 # the original data space.
@@ -106,37 +116,39 @@ if show_plots:
     inv = inverse_principal_components(output, clf)
     ax1 = inv.T.plot()
     ax1.set_title('Including Outliers')
-    plot_histograms(output, 'Including Outliers')
+    # plot_histograms(output, 'Including Outliers')
     plot_model_accuracy(clf, 'Including Outliers', components)
 
 
-# remove outliers that are above 3 std away from mean 
-outliers_rm = output[(np.abs(stats.zscore(output)) < 3).all(axis=1)]
+# get the index of all counties that are above and below 
 outliers = output[~(np.abs(stats.zscore(output)) < 3).all(axis=1)].index.values
 
+# Select all data where the z-score is less than three from original data
+no_outliers = data[data.index.isin(output[(np.abs(stats.zscore(output)) < 3).all(axis=1)].index)] 
 
-# create a dataframe from transforming back into original space
-outliers_rm = pd.DataFrame(clf.inverse_transform(outliers_rm), columns=data.columns, index=outliers_rm.index )
 
-print('Counties Lost From Removing Outliers: {}\n'.format(len(data.index) - len(outliers_rm.index)))
+print('Counties Lost From Removing Outliers: {}\n'.format(len(outliers)))
 
 # agg to state level if true after removing outliers
 if state_level:
-    outliers_rm = outliers_rm.groupby(outliers_rm.index.str.slice(0,2)).mean()
+    no_outliers = no_outliers.groupby(no_outliers.index.str.slice(0,2)).mean()
 
 
 # train the model with outliers removed
 clf = PCA(n_components=components)
-clf.fit(outliers_rm)
-X = clf.transform(outliers_rm)
-output = pd.DataFrame(X, index=outliers_rm.index, columns=['PC_{}_Norm'.format(i) for i in range(1, components+1)])
+clf.fit(no_outliers)
+X = clf.transform(no_outliers)
+print('Explained Var:',sum(clf.explained_variance_ratio_))
+
+output = pd.DataFrame(X, index=no_outliers.index, columns=['PC_{}_Norm'.format(i) for i in range(1, components+1)])
+
 
 # Show what the principal components look like after removing outliers and retraining
 if show_plots:
     inv = inverse_principal_components(output, clf)
     ax2 = inv.T.plot()
     ax2.set_title('Outliers Removed')
-    plot_histograms(output, 'Outliers Removed')
+    # plot_histograms(output, 'Outliers Removed')
     plot_model_accuracy(clf, 'Outliers Removed', components)
     plt.show()
 
@@ -148,28 +160,31 @@ clf = KMeans(n_clusters=3)
 clf.fit(output)
 output['k_clusters'] = clf.predict(output)
 
-shp = read_shape_file(output, state_level=state_level)
+
+shp = read_shape_file(output, state_level=state_level, save_name=False)
 # plotting the shapefile using the color created from the 3 pricipal components
 
-
-# base = shp.plot(color=shp['color'], zorder=1)
 
 # for plotting the k-means outputs
 
 # plot the outliers with grey hashes, only show them if plotting at a county level
 if not state_level:
     base = shp.plot(column='k_clusters',cmap='copper', missing_kwds={'color': 'black'})
-    shp[shp['FIPS'].isin(outliers)].plot(ax=base, color='lightgrey', linewidth=0.1, edgecolor='black',zorder=2, hatch='///')
+
+    # base = shp.plot(color=shp['color'], missing_kwds={'color': 'black'})
+    # shp[shp['FIPS'].isin(outliers)].plot(ax=base, color='lightgrey', linewidth=0.1, edgecolor='black',zorder=2, hatch='///')
+
 else:
-    shp.plot(column='k_clusters',cmap='copper')
+    # shp.plot(column='k_clusters',cmap='copper')
+    shp.plot(color=shp['color'])
 
 plt.show()
 
 # FOR TESTING HOW MANY CLUSTERS WE SHOULD USE WITH K-MEANS
 # results = {'Silhouettes':[], 'Distortion':[]}
 # for i in range(2, 16):
-# results['Silhouettes'].append(silhouette_score(output, clusters))
-# results['Distortion'].append(clf.inertia_)
+    # results['Silhouettes'].append(silhouette_score(output, clusters))
+    # results['Distortion'].append(clf.inertia_)
 
 # PLOT THE ACCURACY FROM THE CLUSTERING 
 # test = pd.DataFrame(results, index=range(2,16))
