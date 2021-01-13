@@ -3,7 +3,7 @@ import pandas as pd
 import os
 import gzip
 
-def read_data(fpath:str, states_to_remove:list=['AK', 'PR', 'HI'], pop_level:int=None, weekends:bool=True, state_level:bool=False): 
+def read_data(fpath:str, states_to_remove:list=['AK', 'PR', 'HI'], pop_level:int=None, state_level:bool=False): 
     """
     Function reads in the csv designated by the file path (fpath) and returns a dataframe with the 
     all counties and a series that contains the states for each county.
@@ -11,8 +11,6 @@ def read_data(fpath:str, states_to_remove:list=['AK', 'PR', 'HI'], pop_level:int
     The returned dataframe contains a column for each day and a row for each county.
 
     Counties that are in the list states_to_remove will be removed from the returned dataframe.
-
-    If weekends is set to False, it will remove the weekends from the returned data. 
 
     """
     data = pd.read_csv(fpath, converters={'FIPS':lambda x:str(x).zfill(5)}).set_index('FIPS')
@@ -23,13 +21,6 @@ def read_data(fpath:str, states_to_remove:list=['AK', 'PR', 'HI'], pop_level:int
         
     data = data.drop(['state', 'pop'], axis=1)
     
-    # Only use full weeks, the start will always be a full week and the ending is the only variable so just subtract the remainder
-    data = data.iloc[:,:len(data.columns)-(len(data.columns)%7)]
-    
-    if not weekends:
-        data = data.T
-        data = pd.concat([data[i:i+7][1:6] for i in range(0,len(data.index),7)] ).T
-
     if state_level:
         data = data.groupby(data.index.str.slice(0,2)).mean()    
 
@@ -177,11 +168,11 @@ def calculate_mobility_difference():
         # dictionary to create a dataframe 
         days ={}
         
-        if year == '2020':
-            # adds the days that start epiweek #1 in 2019 to the ouput (hardcoded but doesn't change so it doesn't matter)
-            fpath = os.path.join(path, '2019', '12')
-            for day in range(29, 32):
-                days['{}-{}-19'.format('12',day)] = pd.read_csv(os.path.join(fpath, str(day), fname.format(2019, 12, day)) ,converters={0: lambda x:str(int(x)).zfill(5)}).rename(columns={'Unnamed: 0' :'FIPS'}).set_index('FIPS')[target_col]
+        # if year == '2020':
+        #     # adds the days that start epiweek #1 in 2019 to the ouput (hardcoded but doesn't change so it doesn't matter)
+        #     fpath = os.path.join(path, '2019', '12')
+        #     for day in range(29, 32):
+        #         days['{}-{}-19'.format('12',day)] = pd.read_csv(os.path.join(fpath, str(day), fname.format(2019, 12, day)) ,converters={0: lambda x:str(int(x)).zfill(5)}).rename(columns={'Unnamed: 0' :'FIPS'}).set_index('FIPS')[target_col]
         
 
         # Data from aggregation is stored in ...Year/Month/Day/file.csv 
@@ -193,16 +184,42 @@ def calculate_mobility_difference():
                 days['{}-{}-{}'.format(month,day,year[2:])] = pd.read_csv(os.path.join(fpath, month, day, fname.format(year, month, day)),converters={0: lambda x:str(int(x)).zfill(5)}).rename(columns={'Unnamed: 0' :'FIPS'}).set_index('FIPS')[target_col]
 
         # return a df with all of the days in the year as columns, rows are counties
-        return pd.DataFrame(days)
+        return pd.DataFrame(days).dropna()
 
+
+    def create_diff_with_window(baseline_year, y2020, window_size):
+        baseline_year = baseline_year.rolling(window_size, center=True, axis=1).mean(skipna=True)
+        y2020 = y2020.drop('02-27-20', axis=1).rolling(window_size, center=True, axis=1).mean(skipna=True)
+        baseline_year.columns = y2020.columns
+        diff = (y2020 - baseline_year[baseline_year.index.isin(y2020.index)])
+        percent_diff = diff / baseline_year[baseline_year.index.isin(diff.index)] * 100
+        
+        import numpy as np #remove any counties that have an "infinite" value
+        percent_diff = percent_diff[~percent_diff.index.isin(percent_diff.index[np.isinf(percent_diff).any(1)].values)]
+        return diff, percent_diff
 
     _2019 = get_year_data(data_path, '2019')
     _2020 = get_year_data(data_path, '2020')
+
+
+
+    diff, percent_diff = create_diff_with_window(_2019, _2020, 7)
+
 
     # adds a state column for when we look at state wide data, helps for creating graphs
     fips = pd.read_csv(os.path.join(cwd, 'safegraph-data', 'safegraph_open_census_data', 'metadata', 'cbg_fips_codes.csv'), converters={'state_fips':lambda x :str(x).zfill(2), 'county_fips':lambda x:str(x).zfill(3)})
     fips['FIPS'] = fips['state_fips'] + fips['county_fips']
     pop_data = pd.read_csv(pop, usecols=['Unnamed: 0', 'B01003e1'], converters={'Unnamed: 0':lambda x: str(x).zfill(5)}).rename(columns={'Unnamed: 0' :'FIPS', 'B01003e1':'pop'}).set_index('FIPS') 
+    
+
+    out = pd.merge(diff, fips, left_index=True, right_on='FIPS').drop(['state_fips', 'county_fips', 'class_code', 'county'], axis=1).set_index('FIPS')
+    out = pd.merge(out, pop_data, left_index=True, right_index=True) 
+    out.to_csv(save_path + ' window baseline difference.csv') # save
+
+
+    out = pd.merge(percent_diff, fips, left_index=True, right_on='FIPS').drop(['state_fips', 'county_fips', 'class_code', 'county'], axis=1).set_index('FIPS')
+    out = pd.merge(out, pop_data, left_index=True, right_index=True) 
+    out.to_csv(save_path + ' window baseline percent difference.csv') # save
 
 
     # Calculate the simple difference between the previous year
@@ -219,7 +236,6 @@ def calculate_mobility_difference():
     out.to_csv(save_path + ' percent difference.csv') # save
 
     print('Done')
-
 
 def update_files():
     aggregate_stay_at_home_data()

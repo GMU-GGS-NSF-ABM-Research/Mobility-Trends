@@ -32,6 +32,7 @@ if not os.path.exists(os.path.join(cwd, 'Data', 'Base Shape Files')):
 
 # Create a folder for outputs
 check_folder('Outputs')
+check_folder('Outputs/Figures/')
 
 
 # make sure that safegraph data is stored in correct folder
