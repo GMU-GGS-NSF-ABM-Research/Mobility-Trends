@@ -2,14 +2,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 from datetime import date
-from utils import read_data, reindex_with_placename
+import matplotlib.dates as mdates
+from utils import read_data, reindex_with_placename, create_standard_axes
 
 cwd = os.path.dirname(os.path.abspath(__file__))
 
-# file = 'mobility percent difference.csv'
-# file = 'mobility window baseline percent difference.csv'
 
-# file = 'mobility difference.csv'
 file = 'mobility window baseline difference.csv'
 
 data_path = os.path.join(cwd, 'Data', file)
@@ -37,42 +35,44 @@ def create_avg_df(df, start_date, end_date):
 avgs = pd.concat([create_avg_df(data, start, stop) for start, stop in date_ranges] ,axis=1)
 
 
-# Take the average of all the available days and sample 2 counties from each quantile 
-single_average = data.mean(axis=1)
-def sample_at_mean_quantile(df, n, q1, q2, ret_avg=False):
-    if not ret_avg:
-        return list(df[(df > df.quantile(q1)) &  (df < df.quantile(q2))].sample(n).index.values)
-    else:
-        return df[(df > df.quantile(q1)) &  (df < df.quantile(q2))].mean(axis=0)
-
-targets = []
-for i in range(1,4):
-    targets += sample_at_mean_quantile(single_average, 1 ,(i-1)/3, i/3)
-
-
+targets = [ '06107','51013', '42021']
+col = {'Arlington County, VA':'#bd0d0d', 'Tulare County, CA':'#15a340', 'Cambria County, PA':'#4266f5'}
 avg_targets = reindex_with_placename(avgs[avgs.index.isin(targets)])
 raw_targets = reindex_with_placename(data[data.index.isin(targets)])
-# raw_targets = pd.concat([sample_at_mean_quantile(data,1 ,(i-1)/4, i/4, True) for i in range(1,5)], axis=1).rename({i:'Quant #{}'.format(i+1) for i in range(4)}, axis=1).T
 
-from pylab import rcParams
-rcParams['figure.figsize'] = 10, 10
-rcParams["legend.loc"] = 'lower right'
 
-# Plotting section
+ax = create_standard_axes()
+data.mean(axis=0).T.plot(ax=ax, style='--', c='k', label='US Avg')
+for key, val in col.items():
+    raw_targets.T[key].plot(ax=ax, c=val)
+ax.xaxis.set_major_locator(mdates.MonthLocator())
+ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d '%y"))
+plt.legend(prop={'size': 18})
+plt.xticks(fontsize=18, rotation=40)
+plt.yticks(fontsize=18) 
+plt.xlabel('Date', labelpad=10, fontsize=18)
+plt.ylabel(r'$\Delta$ MoPE', labelpad=8, fontsize=18)
+# plt.savefig(os.path.join(save_path, 'Raw Time Series.png'))
+
+
+
+# Plotting section for 3 averaged date ranges. We removed this from the paper, but I kept it in just in case. 
 # The US average will be plotted as a black line on the bottom for each plot. 
-fig, ax = plt.subplots()
+ax= create_standard_axes()
 avgs.mean(axis=0).T.plot(ax=ax, style='--', c='k', label='US Avg')
-avg_targets.T.plot(ax=ax)
-plt.legend(prop={'size': 14})
-plt.xticks(fontsize=14, rotation=40)
-plt.yticks(fontsize=14) 
-plt.savefig(os.path.join(save_path, '3 Value Time Series.pdf'))
+for key, val in col.items():
+    avg_targets.T[key].plot(ax=ax, c=val)
+ax.xaxis.set_major_locator(mdates.MonthLocator())
+ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %d '%y"))
+plt.legend(prop={'size': 18})
+plt.xticks(fontsize=18, rotation=40)
+plt.yticks(fontsize=18) 
+plt.xlabel('Date', labelpad=10, fontsize=18)
+plt.ylabel('Change in Minutes Away From Home', labelpad=8, fontsize=18)
 
-fig2, ax2 = plt.subplots() 
-data.mean(axis=0).T.plot(ax=ax2, style='--', c='k', label='US Avg')
-raw_targets.T.plot(ax=ax2)
-plt.legend(prop={'size': 14})
-plt.xticks(fontsize=14, rotation=40)
-plt.yticks(fontsize=14) 
-plt.savefig(os.path.join(save_path, 'Raw Time Series.pdf'))
+# plt.savefig(os.path.join(save_path, '3 Value Time Series.pdf'))
+
+
+
+
 plt.show()

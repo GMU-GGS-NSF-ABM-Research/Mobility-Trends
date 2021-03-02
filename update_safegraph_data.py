@@ -68,10 +68,11 @@ def main():
             downloaded = True
         else:
             break
-    if not downloaded:
+    if not downloaded: 
         print('Up to date...')
     else:
         print('All files are done downloading...')
-        from utils import update_files
-        update_files()
+        from utils import update_files, aggregate_stay_at_home_data
+        aggregate_stay_at_home_data()
+
 main()

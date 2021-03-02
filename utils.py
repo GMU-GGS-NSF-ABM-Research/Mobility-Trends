@@ -3,7 +3,23 @@ import pandas as pd
 import os
 import gzip
 
-def read_data(fpath:str, states_to_remove:list=['AK', 'PR', 'HI'], pop_level:int=None, state_level:bool=False): 
+def create_standard_axes():
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.axes_grid1 import Divider, Size
+    fig = plt.figure(figsize=(9, 9))
+
+    # The first & third items are for padding and the second items are for the
+    # axes. Sizes are in inches.
+    h = [Size.Fixed(1.3), Size.Scaled(1.), Size.Fixed(.2)]
+    v = [Size.Fixed(1.6), Size.Scaled(1.), Size.Fixed(.2)]
+
+    divider = Divider(fig, (0, 0, 1, 1), h, v, aspect=False)
+    # The width and height of the rectangle are ignored.
+
+    ax = fig.add_axes(divider.get_position(), axes_locator=divider.new_locator(nx=1, ny=1))
+    return ax
+
+def read_data(fpath:str, states_to_remove:list=['AK', 'PR', 'HI'], pop_level:int=None, state_level:bool=False, use_fips=None): 
     """
     Function reads in the csv designated by the file path (fpath) and returns a dataframe with the 
     all counties and a series that contains the states for each county.
@@ -24,7 +40,12 @@ def read_data(fpath:str, states_to_remove:list=['AK', 'PR', 'HI'], pop_level:int
     if state_level:
         data = data.groupby(data.index.str.slice(0,2)).mean()    
 
+    if use_fips:
+        data = data.loc[use_fips]
+
+    data.columns = pd.to_datetime(data.columns)
     return data
+
 
 def reindex_with_placename(df, just_state=False):
     '''
@@ -34,6 +55,7 @@ def reindex_with_placename(df, just_state=False):
     Returns the same dataframe with a new index of place-names.
     '''
     cwd = os.path.dirname(os.path.abspath(__file__))
+
     county_info = pd.read_csv(os.path.join(cwd, 'safegraph-data', 'safegraph_open_census_data', 'metadata', 'cbg_fips_codes.csv'), converters={'state_fips':lambda x :str(x).zfill(2), 'county_fips':lambda x:str(x).zfill(3)})
     county_info['FIPS']= county_info['state_fips'] + county_info['county_fips']
     if just_state:
@@ -41,8 +63,12 @@ def reindex_with_placename(df, just_state=False):
     else:
         county_info['Name'] = county_info['county'] + ', ' + county_info['state']
     county_info = county_info.set_index('FIPS').drop(['state_fips', 'county_fips', 'class_code', 'county', 'state'], axis=1)
-
-    return pd.merge(df, county_info, left_index=True, right_index=True).set_index('Name')
+    out = pd.merge(df, county_info, left_index=True, right_index=True).set_index('Name')
+    try:
+        out.columns = pd.to_datetime(out.columns)
+    except:
+        pass
+    return out
     
 
 def aggregate_stay_at_home_data():
@@ -139,7 +165,6 @@ def aggregate_stay_at_home_data():
 
     print('Total Time : {:.2f}s\n'.format(time.time()-start_time))
 
-
 def calculate_mobility_difference():
     '''
     This function uses the paresed safegraph data to calculate the differnce is median-non-home-dwell time when
@@ -149,7 +174,6 @@ def calculate_mobility_difference():
     '''
     print('Starting to calculate county mobility decrease from a baseline.')
     cwd = os.path.dirname(os.path.abspath(__file__))
-
     save_path = os.path.join(cwd, 'Data', 'mobility')
     data_path = os.path.join(cwd, 'safegraph-data', 'aggregated-patterns')
     pop = os.path.join(data_path, '2020', '10', '10', '2020-10-10-countylevel.csv')
@@ -186,11 +210,27 @@ def calculate_mobility_difference():
         # return a df with all of the days in the year as columns, rows are counties
         return pd.DataFrame(days).dropna()
 
-
+    import matplotlib
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
     def create_diff_with_window(baseline_year, y2020, window_size):
         baseline_year = baseline_year.rolling(window_size, center=True, axis=1).mean(skipna=True)
         y2020 = y2020.drop('02-27-20', axis=1).rolling(window_size, center=True, axis=1).mean(skipna=True)
         baseline_year.columns = y2020.columns
+
+        # This section is for creating a figure for the paper, just shows the raw data after its been smoothed, commented out because we only need one but I left it in just in case
+        # ax = create_standard_axes()
+        # baseline_year.mean(axis=0).T.plot(label='2019')
+        # y2020.mean(axis=0).T.plot(label='2020')
+        # ax.xaxis.set_major_locator(mdates.MonthLocator(bymonthday=15))
+        # ax.xaxis.set_major_formatter(mdates.DateFormatter("%b".ljust(8)))
+        # plt.legend(prop={'size': 18})
+        # plt.xticks(fontsize=18, rotation=40,ha='center')
+        # plt.ylabel('MoPE',labelpad=22, fontsize=18)
+        # plt.yticks(fontsize=18) 
+        # plt.xlabel('Date', labelpad=22, fontsize=18)
+        # plt.savefig(os.path.join(cwd, 'Outputs', 'Figures', 'Raw_Time_Series_Smoothed.png'))
+
         diff = (y2020 - baseline_year[baseline_year.index.isin(y2020.index)])
         percent_diff = diff / baseline_year[baseline_year.index.isin(diff.index)] * 100
         
@@ -201,10 +241,7 @@ def calculate_mobility_difference():
     _2019 = get_year_data(data_path, '2019')
     _2020 = get_year_data(data_path, '2020')
 
-
-
     diff, percent_diff = create_diff_with_window(_2019, _2020, 7)
-
 
     # adds a state column for when we look at state wide data, helps for creating graphs
     fips = pd.read_csv(os.path.join(cwd, 'safegraph-data', 'safegraph_open_census_data', 'metadata', 'cbg_fips_codes.csv'), converters={'state_fips':lambda x :str(x).zfill(2), 'county_fips':lambda x:str(x).zfill(3)})
@@ -240,3 +277,4 @@ def calculate_mobility_difference():
 def update_files():
     aggregate_stay_at_home_data()
     calculate_mobility_difference()
+
