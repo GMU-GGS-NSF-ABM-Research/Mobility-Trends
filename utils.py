@@ -3,10 +3,10 @@ import pandas as pd
 import os
 import gzip
 
-def create_standard_axes():
+def create_standard_axes(figsize=(16, 9)):
     import matplotlib.pyplot as plt
     from mpl_toolkits.axes_grid1 import Divider, Size
-    fig = plt.figure(figsize=(9, 9))
+    fig = plt.figure(figsize=figsize)
 
     # The first & third items are for padding and the second items are for the
     # axes. Sizes are in inches.
@@ -219,17 +219,17 @@ def calculate_mobility_difference():
         baseline_year.columns = y2020.columns
 
         # This section is for creating a figure for the paper, just shows the raw data after its been smoothed, commented out because we only need one but I left it in just in case
-        # ax = create_standard_axes()
-        # baseline_year.mean(axis=0).T.plot(label='2019')
-        # y2020.mean(axis=0).T.plot(label='2020')
-        # ax.xaxis.set_major_locator(mdates.MonthLocator(bymonthday=15))
-        # ax.xaxis.set_major_formatter(mdates.DateFormatter("%b".ljust(8)))
-        # plt.legend(prop={'size': 18})
-        # plt.xticks(fontsize=18, rotation=40,ha='center')
-        # plt.ylabel('MoPE',labelpad=22, fontsize=18)
-        # plt.yticks(fontsize=18) 
-        # plt.xlabel('Date', labelpad=22, fontsize=18)
-        # plt.savefig(os.path.join(cwd, 'Outputs', 'Figures', 'Raw_Time_Series_Smoothed.png'))
+        ax = create_standard_axes()
+        baseline_year.mean(axis=0).T.plot(label='2019')
+        y2020.mean(axis=0).T.plot(label='2020')
+        ax.xaxis.set_major_locator(mdates.MonthLocator(bymonthday=15))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b".ljust(8)))
+        plt.legend(prop={'size': 18})
+        plt.xticks(fontsize=18, rotation=40,ha='center')
+        plt.ylabel('MoPE',labelpad=22, fontsize=18)
+        plt.yticks(fontsize=18) 
+        plt.xlabel('Date', labelpad=22, fontsize=18)
+        plt.savefig(os.path.join(cwd, 'Outputs', 'Figures', 'Raw_Time_Series_Smoothed.png'))
 
         diff = (y2020 - baseline_year[baseline_year.index.isin(y2020.index)])
         percent_diff = diff / baseline_year[baseline_year.index.isin(diff.index)] * 100

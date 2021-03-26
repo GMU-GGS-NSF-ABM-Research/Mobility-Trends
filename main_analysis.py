@@ -5,13 +5,14 @@ import matplotlib.dates as mdates
 import geopandas as gpd
 import pandas as pd
 import numpy as np
+from pandas.core.reshape.merge import merge
 from scipy import stats
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
-from sklearn.metrics import confusion_matrix, accuracy_score, silhouette_score
+from sklearn.metrics import confusion_matrix, accuracy_score, silhouette_score, r2_score
 from utils import read_data, reindex_with_placename, create_standard_axes
 
-color_lookup = {'PC #1':'#bd0d0d', 'PC #2':'#15a340', 'PC #3':'#4266f5'}
+color_lookup = {'PC1':'#bd0d0d', 'PC2':'#15a340', 'PC3':'#4266f5'}
 
 cwd = os.path.dirname(os.path.abspath(__file__))
 if not os.path.exists(os.path.join(os.getcwd(), 'Outputs')):
@@ -24,6 +25,8 @@ def read_shape_file(df, state_level=False, save_name=False):
     if not state_level:
         # read the county level shape file
         shp = gpd.read_file(os.path.join(cwd, 'Data', 'Base Shape Files', 'counties.shp'))
+        pop = pd.read_csv(os.path.join(cwd, 'Data', 'mobility window baseline difference.csv'), usecols=['FIPS', 'pop'], dtype={'FIPS':str})
+        shp = shp.merge(pop, left_on='FIPS', right_on='FIPS', how='left')     
     else:
         # read the state level shape file
         shp = gpd.read_file(os.path.join(cwd, 'Data', 'Base Shape Files', 'states.shp'))
@@ -58,7 +61,7 @@ def inverse_principal_components(df, model):
         inverse.append(temp)
 
     # Create a dataframe from the inverse transformation that is back into the time series space and plot each of the principal components
-    return pd.DataFrame(model.inverse_transform(inverse), columns=data.columns, index=['PC #{}'.format(i) for i in range(1,components+1)])
+    return pd.DataFrame(model.inverse_transform(inverse), columns=data.columns, index=['PC{}'.format(i) for i in range(1,components+1)])
 
 def plot_histograms(df, title):
     '''Plots the histograms of the input dataframe, used for showing what the counties look like in PC-space'''
@@ -68,16 +71,21 @@ def plot_histograms(df, title):
         _ax.set_title(col)
     fig.suptitle(title)
 
-def plot_model_accuracy(model, title, components):
+def plot_model_accuracy(model, components):
     ''' For plotting the explained model variance as the number of components increases. '''
-    var=np.cumsum(np.round(model.explained_variance_ratio_, decimals=3)*100)
-    fig, ax = plt.subplots()
-    ax.plot([i for i in range(1,components+1)],var)
+    var=np.cumsum(model.explained_variance_ratio_ * 100)
+    print(var)
+    ax = create_standard_axes(figsize=(9,9))
+    ax.plot([i for i in range(1,components+1)], var)
     ax.grid()
-    ax.set_ylabel('% variance explained')
     ax.set_xticks([i for i in range(1,components+1)])
-    ax.set_xlabel('Number of features')
-    ax.set_title(title)
+    
+    plt.xlabel('Number of Features', labelpad=10, fontsize=18)
+    plt.ylabel('% Variance Explained', labelpad=8, fontsize=18)
+    plt.xticks(fontsize=18)
+    plt.yticks(fontsize=18) 
+    
+
 
 
 file = 'mobility window baseline difference.csv'
@@ -94,6 +102,7 @@ print('Analysis Type: {}'.format(file))
 print('Counties: {}, Days: {}'.format(*data.shape))
 data = data.dropna(axis=1) # make sure there are no null values when training
 print('Counties: {}, Days: {}'.format(*data.shape))
+
 
 # train the original model 
 components = 3
@@ -133,14 +142,15 @@ clf.fit(no_outliers)
 X = clf.transform(no_outliers)
 print('Explained Var:',sum(clf.explained_variance_ratio_))
 print(clf.explained_variance_ratio_)
+
+
+
 output = pd.DataFrame(X, index=no_outliers.index, columns=['PC_{}_Norm'.format(i) for i in range(1, components+1)]) #create a df from the second PCA
 
 data_outlier_removed = data[data.index.isin(output.index)] #get all the data that isn't dropped
 inv = pd.DataFrame(clf.inverse_transform(output), columns=data_outlier_removed.columns, index=data_outlier_removed.index)
 
-SST = ((data_outlier_removed.T - data_outlier_removed.mean(axis=1))**2).sum() #subtract the mean of all observed county days from each day in every county and sum the res
-SSR = ((data_outlier_removed - inv)**2).sum(axis=1) #calculate the SSR for the model 
-R2 = (1-(SSR/SST)) #calculate the explained variance of the PCA model for each county
+R2 = pd.Series(r2_score(data_outlier_removed.T, inv.T, multioutput='raw_values'), index=data_outlier_removed.index).rename('R2')
 
 
 # Show what the principal components look like after removing outliers and re-training
@@ -148,6 +158,7 @@ if show_plots:
 
     ax = create_standard_axes()
     inv = inverse_principal_components(output, clf)
+    print(inv)
     for row in inv.index:
         inv.loc[row].T.plot(ax=ax, c=color_lookup[row], label=row)
     ax.xaxis.set_major_locator(mdates.MonthLocator())
@@ -157,9 +168,9 @@ if show_plots:
     plt.ylabel(r'$\Delta$ MoPE', labelpad=8, fontsize=18)
     plt.xticks(fontsize=18, rotation=40)
     plt.yticks(fontsize=18) 
-    # plt.savefig(os.path.join(cwd, 'Outputs', 'Figures', 'PCA_Time_Series.png'))
+    plt.savefig(os.path.join(cwd, 'Outputs', 'Figures', 'PCA_Time_Series.png'))
     # plot_model_accuracy(clf, 'Accuracy', components)
-    plt.show()
+    # plt.show()
 
 # After testing, K-means was a good enough method to cluster the counties
 output['k_clusters'] = KMeans(n_clusters=3).fit_predict(output)
@@ -178,10 +189,16 @@ output['k_clusters'] = KMeans(n_clusters=3).fit_predict(output)
 # Normalize everything except k_clusters
 clusters = output['k_clusters']
 output.drop('k_clusters', axis=1, inplace=True)
+raw = output.copy()
+raw.columns = [f'PC_{i}_Raw' for i in range(1,len(raw.columns)+1)]
 output = (output - output.min())  / (output.max() - output.min()) #normalize PC values
+
 output['k_clusters'] = clusters + 1
 output['R2'] = R2 
-
+output = pd.concat([output, raw], axis=1)
+# targets = [ '06107','51013', '42021']
+# print(reindex_with_placename(output.loc[targets]))
+# exit()
 # print(output.mean(axis=0))
 # print(reindex_with_placename(output.T[[ '06107', '42021', '51013']].T))
 
@@ -200,7 +217,7 @@ output = pd.concat(temp)
 
 
 # # plotting the shapefile using the color created from the 3 pricipal components
-# shp = read_shape_file(output, state_level=state_level, save_name=None)
+# shp = read_shape_file(output, state_level=state_level, save_name='final')
 
 # # for plotting the k-means outputs
 # # plot the outliers with grey hashes, only show them if plotting at a county level
@@ -232,33 +249,33 @@ output = pd.concat(temp)
 
 # 3D PLOTTING SECTION
 # ANGLE #1
-# import matplotlib
-# matplotlib.rcParams.update({'font.size': 18})
-# from mpl_toolkits.mplot3d import Axes3D
-# fig = plt.figure(figsize=(9,9))
-# ax = fig.add_subplot(projection='3d')
-# for cluster, df in output.groupby('k_clusters'):
-#     ax.scatter(xs=df['PC_1_Norm'], ys=df['PC_2_Norm'], zs=df['PC_3_Norm'], c=colors.to_hex(color_lookup2[cluster]))
-# ax.set_xlabel('PC #1', labelpad=18)
-# ax.set_ylabel('PC #2',labelpad=18)
-# ax.set_zlabel('PC #3',labelpad=18)
-# ax.view_init(20.6382978723405, 65)
-# plt.tight_layout()
-# plt.savefig(os.path.join(cwd, 'Outputs', 'Figures', '3-D Angle 1.png'))
+import matplotlib
+matplotlib.rcParams.update({'font.size': 18})
+from mpl_toolkits.mplot3d import Axes3D
+fig = plt.figure(figsize=(9,9))
+ax = fig.add_subplot(projection='3d')
+for cluster, df in output.groupby('k_clusters'):
+    ax.scatter(xs=df['PC_1_Norm'], ys=df['PC_2_Norm'], zs=df['PC_3_Norm'], c=colors.to_hex(color_lookup2[cluster]))
+ax.set_xlabel('PC1', labelpad=18)
+ax.set_ylabel('PC2',labelpad=18)
+ax.set_zlabel('PC3',labelpad=18)
+ax.view_init(20.6382978723405, 65)
+plt.tight_layout()
+plt.savefig(os.path.join(cwd, 'Outputs', 'Figures', '3-D Angle 1.png'))
 
 # ANGLE #2
-# fig = plt.figure(figsize=(9,9))
-# ax = fig.add_subplot(projection='3d')
-# for cluster, df in output.groupby('k_clusters'):
-#     ax.scatter(xs=df['PC_1_Norm'], ys=df['PC_2_Norm'], zs=df['PC_3_Norm'], c=colors.to_hex(color_lookup2[cluster]))
-# ax.set_xlabel('PC #1', labelpad=18)
-# ax.set_ylabel('PC #2',labelpad=18)
-# ax.set_zlabel('PC #3',labelpad=18)
-# ax.view_init(20.6382978723405, -115)
-# plt.tight_layout()
-# plt.savefig(os.path.join(cwd, 'Outputs', 'Figures', '3-D Angle 2.png'))
+fig = plt.figure(figsize=(9,9))
+ax = fig.add_subplot(projection='3d')
+for cluster, df in output.groupby('k_clusters'):
+    ax.scatter(xs=df['PC_1_Norm'], ys=df['PC_2_Norm'], zs=df['PC_3_Norm'], c=colors.to_hex(color_lookup2[cluster]))
+ax.set_xlabel('PC1', labelpad=18)
+ax.set_ylabel('PC2',labelpad=18)
+ax.set_zlabel('PC3',labelpad=18)
+ax.view_init(20.6382978723405, -115)
+plt.tight_layout()
+plt.savefig(os.path.join(cwd, 'Outputs', 'Figures', '3-D Angle 2.png'))
 # plt.show()
-
+exit()
 if not state_level:
     # this is a hacky way that I created a latex table, I know pandas has a method but I needed a specific format and this was easy enough
     corr_data = pd.read_csv(os.path.join(cwd, 'Data', 'parsed_json.csv'),  converters={'FIPS':lambda x:str(x).zfill(5)}).set_index('FIPS', drop=True) # read the data I want to correlate
