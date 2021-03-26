@@ -2,7 +2,7 @@
 
 A collection of python scripts that uses Safe-Graphs social distancing data to calculate the decrease in median-non-home-swell-time from 2019 to 2020 in response to COVID-19.
 
-All of the Python packages that were used for this analysis are listed in `requirements.txt`. It is reccomened to use anaconda as a programming environment. The following command will create a new conda env from that file.
+All of the Python packages that were used for this analysis are listed in `requirements.txt`. It is recommended to use anaconda as a programming environment. The following command will create a new conda env from that file.
 
 `conda create --name <Mobility_Stats> --file <requirements.txt>`
 
